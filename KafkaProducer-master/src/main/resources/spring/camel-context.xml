@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+    xmlns:camel="http://camel.apache.org/schema/spring"
+    xsi:schemaLocation="        http://www.springframework.org/schema/beans https://www.springframework.org/schema/beans/spring-beans.xsd       http://camel.apache.org/schema/spring        https://camel.apache.org/schema/spring/camel-spring-3.10.0.xsd">
+    <bean id="validatorProcessor" class="org.mycompany.FulFillmentValidatorProcessor" />
+    <bean id="processor" class="org.mycompany.MyProcessor" />
+    <bean id="processor1" class="org.mycompany.MyProcessor1" />
+    <bean id="validationRoute" class="org.mycompany.BeanValidator" />
+    <bean id="exception" class="org.mycompany.ExceptionProcessor" />
+    <bean id="exception2" class="org.mycompany.ServerExceptionProcessor" />
+    
+    <camelContext id="camel" xmlns="http://camel.apache.org/schema/spring">
+    <camel:dataFormats><camel:json id="convertToBean" unmarshalTypeName="org.mycompany.FulfillmentOutcomeManagerBean"></camel:json></camel:dataFormats>
+       <onException>
+		    <exception>java.lang.Exception</exception>
+		   <!--  <handled><simple>${body}</simple></handled> -->
+		   <handled><camel:simple>true</camel:simple></handled>
+		    <log message="from korish >>> ${body}"/>
+		    <process ref="exception2"></process>
+		    <to uri="kafka:error?brokers=localhost:9092"/>
+		</onException>
+       <onException>
+		    <exception>org.apache.camel.component.bean.validator.BeanValidationException</exception>
+		   <!--  <handled><simple>${body}</simple></handled> -->
+		   <handled><camel:simple>true</camel:simple></handled>
+		    <log message="from korish >>> ${body}"/>
+		    <process ref="exception"></process>
+		    <to uri="kafka:error?brokers=localhost:9092"/>
+		</onException>
+		
+    	<!-- <routeBuilder ref="kafkaConsumer" /> -->
+    	<route id="kafka-publish">
+            <from id="producerKafka" uri="file:D:\learning\pocs\fuse\files"/>
+            <to id="producer" uri="kafka:{{kafka.topic}}?brokers=localhost:9092"/>
+        </route>
+        <route id="producer-route">
+            <from id="consumerKafka" uri="kafka:{{kafka.topic}}?brokers=localhost:9092"/>
+            <process ref="validatorProcessor"></process>
+            <to id="myValidator" uri="bean-validator:fulfillmentValidator"/>
+            <process ref="processor"></process>
+            <!-- <setBody id="route-setBody">
+                <simple>Hello World from camel-context.xml</simple>
+            </setBody>
+            <log id="route-log" message=">>> ${body}"/>
+            <to id="producer" uri="kafka:{{kafka.topic}}"/> -->
+           <!--  <setHeader name="camelHeader"><constant>POST</constant></setHeader> -->
+           <to id="utilityApiPost" uri="http://localhost:8090/publish/message/utility/API" />
+           
+        </route>
+        <!-- <route id="error_route">
+        	<from uri="kafka:error?brokers=localhost:9092"/>
+        	<process ref="processor1"></process>
+        </route> -->
+        
+    </camelContext>
+</beans>
